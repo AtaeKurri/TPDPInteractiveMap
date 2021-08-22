@@ -1,0 +1,21 @@
+﻿<Window x:Class="TPDPInteractiveMap.MapWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:TPDPInteractiveMap"
+        mc:Ignorable="d"
+        Title="MapWindow"
+        Height="440"
+        Width="540">
+
+    <Window.Background>
+        <ImageBrush ImageSource="Images/saigyoayakasi1.png" />
+    </Window.Background>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="169*"/>
+            <RowDefinition Height="302*"/>
+        </Grid.RowDefinitions>
+    </Grid>
+</Window>
