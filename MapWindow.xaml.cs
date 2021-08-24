@@ -19,6 +19,8 @@ namespace TPDPInteractiveMap
     /// </summary>
     public partial class MapWindow : Window
     {
+        public static List<Label> NELabels = new List<Label>();
+
         public MapWindow()
         {
             InitializeComponent();

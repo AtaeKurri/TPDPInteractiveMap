@@ -31,7 +31,9 @@ namespace TPDPInteractiveMap
         public static string startupPath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
         public static string startupResources = $"{startupPath}\\Resources";
         public static string townPath = $"{startupResources}\\gn_dat5.arc\\map\\town";
-        public static string[] neededFiles = new string[] {
+        public static string mapExtractDataPath = $"{startupResources}\\gn_dat5.arc\\map\\data";
+        public static string mapDataPath = $"{startupResources}\\mapDatas";
+        public static string[] neededTownFiles = new string[] {
             "town0Base.png",
             "town1Base.png",
             "town2Base.png",
@@ -63,22 +65,21 @@ namespace TPDPInteractiveMap
         {
             try
             {
+                Directory.CreateDirectory(startupResources);
+                Directory.CreateDirectory(startupResources + "\\" + "mapDatas");
                 List<string> files = new List<string>(Directory.EnumerateFiles(startupResources));
                 for (int i = 0; i < files.Count; i++)
                 {
                     files[i] = Path.GetFileName(files[i]);
                 }
-                foreach (string item in neededFiles)
+                // Check des fichiers pour gérer l'affichage et la gestion basique des icones et tout le bordel
+                foreach (string item in neededTownFiles)
                 {
                     if (!files.Contains(item))
                     {
                         throw new MissingFileException();
                     }
                 }
-            }
-            catch (DirectoryNotFoundException)
-            {
-                Directory.CreateDirectory(startupResources);
             }
             catch (MissingFileException)
             {
@@ -97,16 +98,20 @@ namespace TPDPInteractiveMap
                     Properties.Settings.Default.Save();
                 }
                 extractGameFiles();
-                foreach (string file in neededFiles)
+                convertExtractedToJson();
+                foreach (string file in neededTownFiles)
                 {
                     File.Copy(townPath + "\\" + file, startupResources + "\\" + file, true);
                 }
+                Utils.copyFilesRecursively(mapExtractDataPath, mapDataPath);
                 // Suppression de ce qui a été extrait par extractGameFiles()
                 DirectoryInfo di = new DirectoryInfo(startupResources);
                 foreach (DirectoryInfo dir in di.GetDirectories())
                 {
-                    dir.Delete(true);
+                    if (dir.Name != "mapDatas")
+                        dir.Delete(true);
                 }
+                Utils.createConfigurationFile(Utils.configFile);
             }
         }
 
@@ -121,6 +126,33 @@ namespace TPDPInteractiveMap
             startInfo.FileName = "diffgen.exe";
             startInfo.WindowStyle = ProcessWindowStyle.Hidden;
             startInfo.Arguments = $"-i {Properties.Settings.Default.GamePath} -o {startupResources} --extract";
+
+            try
+            {
+                // Start the process with the info we specified.
+                // Call WaitForExit and then the using statement will close.
+                using (Process exeProcess = Process.Start(startInfo))
+                {
+                    exeProcess.WaitForExit();
+                }
+            }
+            catch
+            {
+                MessageBox.Show("Something went wrong. Terminating.");
+                Properties.Settings.Default.GamePath = "";
+                Properties.Settings.Default.Save();
+                Close();
+            }
+        }
+
+        private void convertExtractedToJson()
+        {
+            ProcessStartInfo startInfo = new ProcessStartInfo();
+            startInfo.CreateNoWindow = false;
+            startInfo.UseShellExecute = false;
+            startInfo.FileName = "binedit.exe";
+            startInfo.WindowStyle = ProcessWindowStyle.Hidden;
+            startInfo.Arguments = $"-i {startupResources} --convert";
 
             try
             {
@@ -177,7 +209,8 @@ namespace TPDPInteractiveMap
 
         private void Settings_Click(object sender, RoutedEventArgs e)
         {
-
+            Properties.Settings.Default.GamePath = "";
+            Properties.Settings.Default.Save();
         }
 
         /// <summary>
@@ -255,14 +288,14 @@ namespace TPDPInteractiveMap
                     for (int i = 0; i < fields.Length; i++)
                     {
                         // Créer les images dans les différentes cases
-                        Image Mole = new Image();
-                        Mole.Width = 16;
-                        Mole.Height = 16;
+                        Image Icon = new Image();
+                        Icon.Width = 16;
+                        Icon.Height = 16;
                         ImageSource MoleImage = new BitmapImage(new Uri($"pack://application:,,,/Images/icon{iconNum}.png"));
-                        Mole.Source = MoleImage;
-                        Grid.SetRow(Mole, Globals.globalCases[j].positionY);
-                        Grid.SetColumn(Mole, Globals.globalCases[j].positionX + 1);
-                        gensokyoMap.Children.Add(Mole);
+                        Icon.Source = MoleImage;
+                        Grid.SetRow(Icon, Globals.globalCases[j].positionY);
+                        Grid.SetColumn(Icon, Globals.globalCases[j].positionX + 1);
+                        gensokyoMap.Children.Add(Icon);
                     }
                     j++;
                 }
@@ -348,9 +381,9 @@ namespace TPDPInteractiveMap
             if (name == "0")
                 return;
             Utils util = new Utils();
-            List<LocationInfo> locationInfos = util.readJson();
-            LocationInfo clickedLocation = locationInfos[0];
-            bool found = false;
+            List<MapData> mapDatas = util.readJson();
+            MapData clickedLocation = mapDatas[0];
+            /*bool found = false;
             // Si la configuration n'existe pas, la créer puis la lire, sinon on la lis juste.
             for (int i = 0; i < locationInfos.Count; i++)
             {
@@ -372,10 +405,53 @@ namespace TPDPInteractiveMap
                     byte[] bytes = Encoding.UTF8.GetBytes(jsonString);
                     file.Write(bytes, 0, bytes.Length);
                 }
+            }*/
+            foreach (MapData map in mapDatas)
+            {
+                if (map.location_name == name)
+                {
+                    clickedLocation = map;
+                }
             }
             MapWindow mapWindow = new MapWindow();
-            mapWindow.Title = clickedLocation.Name;
+
+            // Logique de remplissage de la fenêtre
+            mapWindow.Title = $"Map Info - {clickedLocation.location_name}";
+            mapWindow.mapWindowName.Content = clickedLocation.location_name;
+
+            mapWindowFillLogic(mapWindow, clickedLocation);
+            // Logique terminée, on montre la fenêtre
             mapWindow.Show();
+        }
+
+        private void mapWindowFillLogic(MapWindow mapWindow, MapData clickedLocation)
+        {
+            // Normal Encounters
+            int row = 0;
+            int index = 0;
+            for (int i = 0; i < 2; i++)
+            {
+                for (int j = 0; j < 5; j++)
+                {
+                    StackPanel dynamicStackPanel = new StackPanel();
+                    Thickness thicc = new Thickness(5);
+                    dynamicStackPanel.Margin = thicc;
+                    dynamicStackPanel.Background = new SolidColorBrush(Colors.Black);
+                    dynamicStackPanel.Background.Opacity = 0.5;
+
+                    Label name = new Label();
+                    name.Content = clickedLocation.normal_encounters[index].id;
+                    name.FontFamily = new FontFamily("Bodoni MT");
+                    name.Foreground = new SolidColorBrush(Colors.White);
+                    dynamicStackPanel.Children.Add(name);
+
+                    Grid.SetRow(dynamicStackPanel, row);
+                    Grid.SetColumn(dynamicStackPanel, j);
+                    mapWindow.normalEncountersGrid.Children.Add(dynamicStackPanel);
+                    index++;
+                }
+                row++;
+            }
         }
     }
 }
